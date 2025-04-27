@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Water Sort Puzzle</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f8ff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        h1 {
+            color: #4682b4;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+        }
+        
+        .tubes-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            max-width: 800px;
+        }
+        
+        .tube {
+            width: 60px;
+            height: 200px;
+            border: 3px solid #4682b4;
+            border-top: none;
+            border-radius: 0 0 10px 10px;
+            display: flex;
+            flex-direction: column-reverse;
+            cursor: pointer;
+            position: relative;
+            background-color: white;
+        }
+        
+        .tube::before {
+            content: '';
+            position: absolute;
+            top: -5px;
+            left: -3px;
+            right: -3px;
+            height: 10px;
+            background-color: #4682b4;
+            border-radius: 10px 10px 0 0;
+        }
+        
+        .water {
+            height: 40px;
+            border-radius: 0 0 5px 5px;
+            position: relative;
+        }
+        
+        .water.top::after {
+            content: '↑';
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: black;
+            font-weight: bold;
+        }
+        
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            background-color: #4682b4;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: #36648b;
+        }
+        
+        .message {
+            margin-top: 20px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #2e8b57;
+            height: 24px;
+        }
+        
+        .level-info {
+            margin-bottom: 10px;
+            font-size: 18px;
+            color: #4682b4;
+        }
+        
+        /* Color classes for water */
+        .color-1 { background-color: #ff0000; } /* Red */
+        .color-2 { background-color: #00ff00; } /* Green */
+        .color-3 { background-color: #0000ff; } /* Blue */
+        .color-4 { background-color: #ffff00; } /* Yellow */
+        .color-5 { background-color: #ff00ff; } /* Magenta */
+        .color-6 { background-color: #00ffff; } /* Cyan */
+        .color-7 { background-color: #ffa500; } /* Orange */
+        .color-8 { background-color: #800080; } /* Purple */
+        .color-9 { background-color: #008000; } /* Dark Green */
+        .color-10 { background-color: #a52a2a; } /* Brown */
+    </style>
+</head>
+<body>
+    <h1>Water Sort Puzzle</h1>
+    <div class="level-info">Level: <span id="level">1</span></div>
+    <div class="message" id="message"></div>
+    
+    <div class="game-container">
+        <div class="tubes-container" id="tubes-container"></div>
+        
+        <div class="controls">
+            <button id="new-game">New Game</button>
+            <button id="next-level">Next Level</button>
+        </div>
+    </div>
+
+    <script>
+        // Game state
+        let selectedTube = null;
+        let gameState = [];
+        let currentLevel = 1;
+        const maxLevel = 5;
+        const colors = [
+            'color-1', 'color-2', 'color-3', 'color-4', 'color-5',
+            'color-6', 'color-7', 'color-8', 'color-9', 'color-10'
+        ];
+        
+        // DOM elements
+        const tubesContainer = document.getElementById('tubes-container');
+        const messageElement = document.getElementById('message');
+        const levelElement = document.getElementById('level');
+        const newGameBtn = document.getElementById('new-game');
+        const nextLevelBtn = document.getElementById('next-level');
+        
+        // Initialize game
+        function initGame() {
+            tubesContainer.innerHTML = '';
+            gameState = [];
+            selectedTube = null;
+            messageElement.textContent = '';
+            
+            // Create level configuration
+            const levelConfig = getLevelConfig(currentLevel);
+            const { tubeCount, colorsPerTube, emptyTubes } = levelConfig;
+            
+            // Create color distribution for this level
+            const colorDistribution = [];
+            for (let i = 0; i < colorsPerTube; i++) {
+                for (let j = 0; j < tubeCount - emptyTubes; j++) {
+                    colorDistribution.push(colors[j]);
+                }
+            }
+            
+            // Shuffle colors
+            colorDistribution.sort(() => Math.random() - 0.5);
+            
+            // Create tubes
+            for (let i = 0; i < tubeCount; i++) {
+                const tube = document.createElement('div');
+                tube.className = 'tube';
+                tube.dataset.index = i;
+                
+                // Add colors to tube (except empty tubes)
+                const tubeColors = [];
+                if (i < tubeCount - emptyTubes) {
+                    for (let j = 0; j < colorsPerTube; j++) {
+                        const color = colorDistribution.pop();
+                        tubeColors.push(color);
+                        
+                        const water = document.createElement('div');
+                        water.className = `water ${color}`;
+                        if (j === colorsPerTube - 1) water.classList.add('top');
+                        tube.appendChild(water);
+                    }
+                }
+                
+                gameState.push(tubeColors);
+                tube.addEventListener('click', handleTubeClick);
+                tubesContainer.appendChild(tube);
+            }
+        }
+        
+        // Get configuration for current level
+        function getLevelConfig(level) {
+            const configs = [
+                { tubeCount: 4, colorsPerTube: 2, emptyTubes: 1 },  // Level 1
+                { tubeCount: 5, colorsPerTube: 3, emptyTubes: 1 },  // Level 2
+                { tubeCount: 6, colorsPerTube: 4, emptyTubes: 2 },  // Level 3
+                { tubeCount: 7, colorsPerTube: 4, emptyTubes: 2 },  // Level 4
+                { tubeCount: 8, colorsPerTube: 4, emptyTubes: 3 }   // Level 5
+            ];
+            return configs[Math.min(level - 1, configs.length - 1)];
+        }
+        
+        // Handle tube click
+        function handleTubeClick(event) {
+            const tubeIndex = parseInt(event.currentTarget.dataset.index);
+            const tube = gameState[tubeIndex];
+            
+            // If no tube is selected, select this one
+            if (selectedTube === null) {
+                // Only select if tube has liquid
+                if (tube.length > 0) {
+                    selectedTube = tubeIndex;
+                    event.currentTarget.style.borderColor = '#ff0000';
+                }
+                return;
+            }
+            
+            // If same tube is clicked again, deselect it
+            if (selectedTube === tubeIndex) {
+                document.querySelector(`.tube[data-index="${selectedTube}"]`).style.borderColor = '#4682b4';
+                selectedTube = null;
+                return;
+            }
+            
+            // Try to move liquid from selected tube to this one
+            const sourceTube = gameState[selectedTube];
+            const targetTube = gameState[tubeIndex];
+            
+            // Check if move is valid
+            if (isValidMove(sourceTube, targetTube)) {
+                // Move the liquid (from top of source to top of target)
+                const color = sourceTube[sourceTube.length - 1];
+                sourceTube.pop();
+                targetTube.push(color);
+                
+                // Update UI
+                updateTubeUI(selectedTube);
+                updateTubeUI(tubeIndex);
+                
+                // Check for win condition
+                if (checkWinCondition()) {
+                    messageElement.textContent = 'Level Complete!';
+                    if (currentLevel < maxLevel) {
+                        nextLevelBtn.style.display = 'inline-block';
+                    }
+                }
+            }
+            
+            // Deselect the tube
+            document.querySelector(`.tube[data-index="${selectedTube}"]`).style.borderColor = '#4682b4';
+            selectedTube = null;
+        }
+        
+        // Check if move is valid
+        function isValidMove(sourceTube, targetTube) {
+            // Target tube must have space
+            if (targetTube.length >= getLevelConfig(currentLevel).colorsPerTube) {
+                messageElement.textContent = 'Target tube is full!';
+                return false;
+            }
+            
+            // Source tube must have liquid
+            if (sourceTube.length === 0) {
+                messageElement.textContent = 'Source tube is empty!';
+                return false;
+            }
+            
+            // If target is empty, move is valid
+            if (targetTube.length === 0) {
+                messageElement.textContent = '';
+                return true;
+            }
+            
+            // Top colors must match
+            const sourceColor = sourceTube[sourceTube.length - 1];
+            const targetColor = targetTube[targetTube.length - 1];
+            
+            if (sourceColor === targetColor) {
+                messageElement.textContent = '';
+                return true;
+            }
+            
+            messageElement.textContent = 'Colors don\'t match!';
+            return false;
+        }
+        
+        // Update tube UI
+        function updateTubeUI(tubeIndex) {
+            const tubeElement = document.querySelector(`.tube[data-index="${tubeIndex}"]`);
+            tubeElement.innerHTML = '';
+            
+            // Add the tube top
+            const tubeTop = document.createElement('div');
+            tubeTop.style.position = 'absolute';
+            tubeTop.style.top = '-5px';
+            tubeTop.style.left = '-3px';
+            tubeTop.style.right = '-3px';
+            tubeTop.style.height = '10px';
+            tubeTop.style.backgroundColor = '#4682b4';
+            tubeTop.style.borderRadius = '10px 10px 0 0';
+            tubeElement.appendChild(tubeTop);
+            
+            // Add water segments (in reverse order to maintain visual top-to-bottom)
+            const tubeColors = gameState[tubeIndex];
+            for (let i = tubeColors.length - 1; i >= 0; i--) {
+                const water = document.createElement('div');
+                water.className = `water ${tubeColors[i]}`;
+                if (i === tubeColors.length - 1) water.classList.add('top');
+                tubeElement.appendChild(water);
+            }
+        }
+        
+        // Check win condition
+        function checkWinCondition() {
+            const colorsPerTube = getLevelConfig(currentLevel).colorsPerTube;
+            
+            for (const tube of gameState) {
+                // Skip empty tubes
+                if (tube.length === 0) continue;
+                
+                // If tube is not full, game is not won
+                if (tube.length < colorsPerTube) return false;
+                
+                // Check if all colors in tube are the same
+                const firstColor = tube[0];
+                for (const color of tube) {
+                    if (color !== firstColor) return false;
+                }
+            }
+            
+            return true;
+        }
+        
+        // Event listeners
+        newGameBtn.addEventListener('click', () => {
+            initGame();
+            nextLevelBtn.style.display = 'none';
+        });
+        
+        nextLevelBtn.addEventListener('click', () => {
+            if (currentLevel < maxLevel) {
+                currentLevel++;
+                levelElement.textContent = currentLevel;
+                initGame();
+                nextLevelBtn.style.display = 'none';
+            }
+        });
+        
+        // Start the game
+        initGame();
+        nextLevelBtn.style.display = 'none';
+    </script>
+</body>
+</html>

@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Candy Match Game</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        #game-container {
+            position: relative;
+            width: 480px;
+            height: 480px;
+            border: 2px solid #333;
+            background-color: white;
+        }
+        #grid {
+            display: grid;
+            grid-template-columns: repeat(8, 60px);
+            grid-template-rows: repeat(8, 60px);
+            gap: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .cell {
+            width: 60px;
+            height: 60px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-sizing: border-box;
+            cursor: pointer;
+        }
+        .candy {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        .selected {
+            border: 3px solid yellow;
+        }
+        #info {
+            position: absolute;
+            top: -80px;
+            left: 0;
+            font-size: 20px;
+            font-weight: bold;
+            white-space: pre-line;
+        }
+        #mute-button {
+            position: absolute;
+            top: -80px;
+            right: 0;
+            font-size: 16px;
+            padding: 5px 10px;
+            cursor: pointer;
+            background-color: #333;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+        }
+        #mute-button:hover {
+            background-color: #555;
+        }
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            color: red;
+            display: none;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            z-index: 10;
+        }
+        #popup {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 32px;
+            color: #fff;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 10px;
+            display: none;
+            animation: fadeOut 1s ease-in-out;
+            z-index: 5;
+        }
+        @keyframes fadeOut {
+            0% { opacity: 1; }
+            80% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+        #start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 20;
+        }
+        #start-button {
+            padding: 10px 20px;
+            font-size: 24px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        #start-button:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="info"></div>
+        <button id="mute-button">Mute</button>
+        <div id="game-over">Game Over!<br>Click to Restart</div>
+        <div id="popup"></div>
+        <div id="start-screen">
+            <h1>Candy Match Game</h1>
+            <p>Match 3 or more candies to score points!</p>
+            <button id="start-button">Start Game</button>
+        </div>
+        <div id="grid"></div>
+    </div>
+
+    <!-- Sound effects -->
+    <audio id="pop-sound" src="https://www.orangefreesounds.com/wp-content/uploads/2014/09/Pop-sound-effect.mp3"></audio>
+    <audio id="bg-music" loop>
+        <!-- Fallback background music that doesn't require hosting -->
+        <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        // Game constants
+        const rows = 8;
+        const cols = 8;
+        const baseCandies = ['#FF5252', '#4CAF50', '#2196F3', '#FFEB3B', '#9C27B0']; // red, green, blue, yellow, purple
+        const extraCandies = ['#FF9800', '#E91E63']; // orange, pink
+        const popupMessages = ['Good Job!', 'Excellent!', 'Outstanding!', 'Great Move!', 'Awesome!'];
+        
+        // Game variables
+        const grid = [];
+        let candies = [...baseCandies];
+        let selected = null;
+        let score = 0;
+        let movesLeft = 0;
+        let isProcessing = false;
+        let currentStage = 1;
+        let gameOver = false;
+        
+        // Stages configuration
+        const stages = [
+            { targetScore: 500, moves: 20, candyTypes: 5 },
+            { targetScore: 1000, moves: 25, candyTypes: 6 },
+            { targetScore: 1500, moves: 30, candyTypes: 7 },
+            { targetScore: 2000, moves: 35, candyTypes: 7 }
+        ];
+        
+        // DOM elements
+        const gridElement = document.getElementById('grid');
+        const infoElement = document.getElementById('info');
+        const gameOverElement = document.getElementById('game-over');
+        const popupElement = document.getElementById('popup');
+        const startScreen = document.getElementById('start-screen');
+        const startButton = document.getElementById('start-button');
+        const popSound = document.getElementById('pop-sound');
+        const bgMusic = document.getElementById('bg-music');
+        const muteButton = document.getElementById('mute-button');
+
+        // Event listeners
+        muteButton.addEventListener('click', toggleMute);
+        startButton.addEventListener('click', startGame);
+        gameOverElement.addEventListener('click', restartGame);
+
+        // Initialize game
+        function init() {
+            startStage(currentStage);
+            renderGrid();
+            updateInfo();
+        }
+
+        // Start game function
+        function startGame() {
+            startScreen.style.display = 'none';
+            // Try to play background music after user interaction
+            bgMusic.play().catch(e => console.log('Audio play prevented:', e));
+            init();
+        }
+
+        // Restart game function
+        function restartGame() {
+            currentStage = 1;
+            gameOverElement.style.display = 'none';
+            init();
+        }
+
+        // Toggle mute/unmute
+        function toggleMute() {
+            bgMusic.muted = !bgMusic.muted;
+            muteButton.textContent = bgMusic.muted ? 'Unmute' : 'Mute';
+        }
+
+        // Show popup message
+        function showPopup() {
+            const message = popupMessages[Math.floor(Math.random() * popupMessages.length)];
+            popupElement.textContent = message;
+            popupElement.style.display = 'block';
+            
+            // Play pop sound if not muted
+            if (!bgMusic.muted) {
+                popSound.currentTime = 0;
+                popSound.play().catch(e => console.log('Pop sound prevented:', e));
+            }
+            
+            setTimeout(() => {
+                popupElement.style.display = 'none';
+            }, 1000);
+        }
+
+        // Start a stage
+        function startStage(stage) {
+            const stageIndex = Math.min(stage - 1, stages.length - 1);
+            const stageData = stages[stageIndex];
+            
+            score = 0;
+            movesLeft = stageData.moves;
+            candies = baseCandies.slice(0, stageData.candyTypes);
+            
+            if (stageData.candyTypes > 5) {
+                candies.push(...extraCandies.slice(0, stageData.candyTypes - 5));
+            }
+            
+            // Initialize grid with random candies
+            for (let i = 0; i < rows; i++) {
+                grid[i] = [];
+                for (let j = 0; j < cols; j++) {
+                    grid[i][j] = candies[Math.floor(Math.random() * candies.length)];
+                }
+            }
+            
+            // Remove any initial matches
+            removeInitialMatches();
+            
+            gameOver = false;
+            updateInfo();
+        }
+
+        // Render the game grid
+        function renderGrid() {
+            gridElement.innerHTML = '';
+            
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.row = i;
+                    cell.dataset.col = j;
+                    
+                    const candy = grid[i][j];
+                    if (candy) {
+                        const candyDiv = document.createElement('div');
+                        candyDiv.className = 'candy';
+                        candyDiv.style.backgroundColor = candy;
+                        cell.appendChild(candyDiv);
+                    }
+                    
+                    if (selected && selected.i === i && selected.j === j) {
+                        cell.classList.add('selected');
+                    }
+                    
+                    cell.addEventListener('click', handleClick);
+                    gridElement.appendChild(cell);
+                }
+            }
+        }
+
+        // Update game info display
+        function updateInfo() {
+            const stageData = stages[Math.min(currentStage - 1, stages.length - 1)];
+            infoElement.textContent = `Stage: ${currentStage}\nScore: ${score}/${stageData.targetScore}\nMoves: ${movesLeft}`;
+        }
+
+        // Handle cell clicks
+        function handleClick(event) {
+            if (gameOver) {
+                restartGame();
+                return;
+            }
+            
+            if (isProcessing || movesLeft <= 0) return;
+            
+            const i = parseInt(event.target.closest('.cell').dataset.row);
+            const j = parseInt(event.target.closest('.cell').dataset.col);
+            
+            if (!selected) {
+                selected = { i, j };
+                renderGrid();
+            } else {
+                if (isAdjacent(selected, { i, j })) {
+                    swapCandies(selected, { i, j });
+                    
+                    if (!checkMatches()) {
+                        // No matches, swap back
+                        swapCandies(selected, { i, j });
+                        selected = null;
+                    } else {
+                        movesLeft--;
+                        isProcessing = true;
+                        setTimeout(processMatches, 500);
+                    }
+                    
+                    renderGrid();
+                } else {
+                    // Select new candy
+                    selected = { i, j };
+                    renderGrid();
+                }
+            }
+            
+            updateInfo();
+        }
+
+        // Check if two positions are adjacent
+        function isAdjacent(pos1, pos2) {
+            return (Math.abs(pos1.i - pos2.i) === 1 && pos1.j === pos2.j) ||
+                   (Math.abs(pos1.j - pos2.j) === 1 && pos1.i === pos2.i);
+        }
+
+        // Swap candies in the grid
+        function swapCandies(pos1, pos2) {
+            const temp = grid[pos1.i][pos1.j];
+            grid[pos1.i][pos1.j] = grid[pos2.i][pos2.j];
+            grid[pos2.i][pos2.j] = temp;
+        }
+
+        // Check for matches in the grid
+        function checkMatches() {
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    // Horizontal matches
+                    if (j <= cols - 3 && grid[i][j] &&
+                        grid[i][j] === grid[i][j + 1] &&
+                        grid[i][j] === grid[i][j + 2]) {
+                        return true;
+                    }
+                    
+                    // Vertical matches
+                    if (i <= rows - 3 && grid[i][j] &&
+                        grid[i][j] === grid[i + 1][j] &&
+                        grid[i][j] === grid[i + 2][j]) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        // Process matches in the grid
+        function processMatches() {
+            const matched = new Set();
+            
+            // Find all matches
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    // Horizontal matches
+                    if (j <= cols - 3 && grid[i][j] &&
+                        grid[i][j] === grid[i][j + 1] &&
+                        grid[i][j] === grid[i][j + 2]) {
+                        matched.add(`${i},${j}`);
+                        matched.add(`${i},${j + 1}`);
+                        matched.add(`${i},${j + 2}`);
+                        
+                        // Check for longer matches
+                        let k = j + 3;
+                        while (k < cols && grid[i][k] === grid[i][j]) {
+                            matched.add(`${i},${k}`);
+                            k++;
+                        }
+                    }
+                    
+                    // Vertical matches
+                    if (i <= rows - 3 && grid[i][j] &&
+                        grid[i][j] === grid[i + 1][j] &&
+                        grid[i][j] === grid[i + 2][j]) {
+                        matched.add(`${i},${j}`);
+                        matched.add(`${i + 1},${j}`);
+                        matched.add(`${i + 2},${j}`);
+                        
+                        // Check for longer matches
+                        let k = i + 3;
+                        while (k < rows && grid[k][j] === grid[i][j]) {
+                            matched.add(`${k},${j}`);
+                            k++;
+                        }
+                    }
+                }
+            }
+            
+            // Remove matched candies and update score
+            matched.forEach(pos => {
+                const [i, j] = pos.split(',').map(Number);
+                grid[i][j] = null;
+            });
+            
+            score += matched.size * 10;
+            
+            // Drop candies and fill empty spaces
+            dropCandies();
+            fillEmpty();
+            renderGrid();
+            showPopup();
+            
+            const stageData = stages[Math.min(currentStage - 1, stages.length - 1)];
+            
+            // Check if stage is complete
+            if (score >= stageData.targetScore) {
+                currentStage++;
+                
+                if (currentStage > stages.length) {
+                    // Game completed all stages
+                    gameOver = true;
+                    gameOverElement.textContent = 'You Win!\nClick to Play Again';
+                    gameOverElement.style.display = 'block';
+                    isProcessing = false;
+                } else {
+                    // Move to next stage
+                    setTimeout(() => {
+                        startStage(currentStage);
+                        renderGrid();
+                        updateInfo();
+                    }, 1000);
+                }
+            } 
+            // Check if game over (no moves left)
+            else if (movesLeft <= 0 && score < stageData.targetScore) {
+                gameOver = true;
+                gameOverElement.textContent = 'Game Over!\nClick to Restart';
+                gameOverElement.style.display = 'block';
+                isProcessing = false;
+            } 
+            // Check for new matches after filling
+            else if (checkMatches()) {
+                setTimeout(processMatches, 500);
+            } else {
+                isProcessing = false;
+                selected = null;
+            }
+            
+            updateInfo();
+        }
+
+        // Drop candies down to fill empty spaces
+        function dropCandies() {
+            for (let j = 0; j < cols; j++) {
+                let empty = -1;
+                
+                for (let i = rows - 1; i >= 0; i--) {
+                    if (grid[i][j] === null && empty === -1) {
+                        empty = i;
+                    } else if (grid[i][j] !== null && empty !== -1) {
+                        grid[empty][j] = grid[i][j];
+                        grid[i][j] = null;
+                        empty--;
+                    }
+                }
+            }
+        }
+
+        // Fill empty cells at the top with new candies
+        function fillEmpty() {
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    if (grid[i][j] === null) {
+                        grid[i][j] = candies[Math.floor(Math.random() * candies.length)];
+                    }
+                }
+            }
+        }
+
+        // Remove any initial matches when starting a level
+        function removeInitialMatches() {
+            while (checkMatches()) {
+                processMatches();
+                isProcessing = false;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Water Sort Puzzle</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background-color: #f0f0f0;
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      border: 2px solid #333;
+      max-width: 90%;
+    }
+    #ui {
+      position: absolute;
+      top: 20px;
+      text-align: center;
+    }
+    #instructions {
+      font-size: 16px;
+      color: #333;
+      margin-bottom: 10px;
+    }
+    #message {
+      font-size: 24px;
+      color: #333;
+      margin-bottom: 10px;
+      transition: opacity 0.5s;
+    }
+    #message.error {
+      color: #d00;
+      opacity: 1;
+    }
+    #stage-info {
+      font-size: 18px;
+      color: #555;
+      margin-bottom: 10px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 18px;
+      margin: 5px;
+      cursor: pointer;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      transition: transform 0.1s;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    button:active {
+      transform: scale(1.1);
+    }
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    @media (max-width: 600px) {
+      canvas {
+        width: 90%;
+      }
+      button {
+        padding: 8px 16px;
+        font-size: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <div id="instructions">Click a bottle to select, then another to pour. Sort colors to win!</div>
+    <div id="message"></div>
+    <div id="stage-info"></div>
+    <button id="restart" title="Restart current stage">↻ Restart</button>
+    <button id="next" disabled title="Win to proceed">→ Next</button>
+    <button id="undo" disabled title="Undo last pour">↺ Undo</button>
+  </div>
+  <script>
+    let bottles = [];
+    let selectedBottle = null;
+    let gameWon = false;
+    let currentStage = 0;
+    let moveHistory = [];
+    let errorTimeout = null;
+
+    const stages = [
+      [['red', 'blue', 'green', ''], ['blue', 'green', 'red', ''], ['green', 'red', 'blue', ''], ['', '', '', '']],
+      [['red', 'red', 'blue', ''], ['blue', 'green', 'green', ''], ['green', 'blue', 'red', ''], ['', '', '', '']],
+      [['blue', 'red', 'green', ''], ['green', 'blue', 'red', ''], ['red', 'green', 'blue', ''], ['', '', '', '']],
+      [['red', 'blue', 'green', ''], ['green', 'red', 'blue', ''], ['blue', 'green', 'red', ''], ['', '', '', '']],
+      [['blue', 'green', 'red', ''], ['red', 'blue', 'green', ''], ['green', 'red', 'blue', ''], ['', '', '', '']],
+      [['red', 'green', 'blue', ''], ['blue', 'red', 'green', ''], ['green', 'blue', 'red', ''], ['', '', '', '']],
+      [['green', 'blue', 'red', ''], ['red', 'green', 'blue', ''], ['blue', 'red', 'green', ''], ['', '', '', '']],
+      [['blue', 'red', 'green', ''], ['green', 'blue', 'red', ''], ['red', 'green', 'blue', ''], ['', '', '', '']],
+      [['red', 'blue', 'green', ''], ['green', 'red', 'blue', ''], ['blue', 'green', 'red', ''], ['', '', '', '']],
+      [['blue', 'green', 'red', ''], ['red', 'blue', 'green', ''], ['green', 'red', 'blue', ''], ['', '', '', '']],
+      [['red', 'green', 'blue', ''], ['blue', 'red', 'green', ''], ['green', 'blue', 'red', ''], ['', '', '', '']],
+      [['green', 'blue', 'red', ''], ['red', 'green', 'blue', ''], ['blue', 'red', 'green', ''], ['', '', '', '']],
+      [['blue', 'red', 'green', ''], ['green', 'blue', 'red', ''], ['red', 'green', 'blue', ''], ['', '', '', '']],
+      [['red', 'blue', 'green', ''], ['green', 'red', 'blue', ''], ['blue', 'green', 'red', ''], ['', '', '', '']],
+      [['blue', 'green', 'red', ''], ['red', 'blue', 'green', ''], ['green', 'red', 'blue', ''], ['', '', '', '']],
+      [['red', 'green', 'blue', ''], ['blue', 'red', 'green', ''], ['green', 'blue', 'red', ''], ['', '', '', '']],
+      [['green', 'blue', 'red', ''], ['red', 'green', 'blue', ''], ['blue', 'red', 'green', ''], ['', '', '', '']],
+      [['blue', 'red', 'green', ''], ['green', 'blue', 'red', ''], ['red', 'green', 'blue', ''], ['', '', '', '']],
+      [['red', 'blue', 'green', ''], ['green', 'red', 'blue', ''], ['blue', 'green', 'red', ''], ['', '', '', '']],
+      [['blue', 'green', 'red', ''], ['red', 'blue', 'green', ''], ['green', 'red', 'blue', ''], ['', '', '', '']],
+      [['red', 'yellow', 'blue', 'green'], ['blue', 'green', 'red', 'yellow'], ['yellow', 'blue', 'green', 'red'], ['green', 'red', 'yellow', 'blue'], ['', '', '', '']],
+      [['red', 'blue', 'yellow', 'green'], ['yellow', 'green', 'red', 'blue'], ['blue', 'red', 'green', 'yellow'], ['green', 'blue', 'yellow', 'red'], ['', '', '', '']],
+      [['yellow', 'blue', 'green', 'red'], ['green', 'red', 'yellow', 'blue'], ['blue', 'yellow', 'red', 'green'], ['red', 'green', 'blue', 'yellow'], ['', '', '', '']],
+      [['blue', 'red', 'green', 'yellow'], ['yellow', 'blue', 'red', 'green'], ['green', 'yellow', 'blue', 'red'], ['red', 'green', 'yellow', 'blue'], ['', '', '', '']],
+      [['red', 'green', 'blue', 'yellow'], ['blue', 'yellow', 'green', 'red'], ['yellow', 'red', 'blue', 'green'], ['green', 'blue', 'red', 'yellow'], ['', '', '', '']],
+      [['yellow', 'red', 'green', 'blue'], ['blue', 'green', 'yellow', 'red'], ['red', 'blue', 'yellow', 'green'], ['green', 'yellow', 'blue', 'red'], ['', '', '', '']],
+      [['blue', 'yellow', 'red', 'green'], ['green', 'blue', 'yellow', 'red'], ['red', 'green', 'blue', 'yellow'], ['yellow', 'red', 'green', 'blue'], ['', '', '', '']],
+      [['red', 'blue', 'green', 'yellow'], ['yellow', 'green', 'red', 'blue'], ['blue', 'yellow', 'green', 'red'], ['', '', '', ''], ['', '', '', '']],
+      [['green', 'yellow', 'blue', 'red'], ['blue', 'red', 'green', 'yellow'], ['yellow', 'blue', 'red', 'green'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'green', 'yellow', 'blue'], ['blue', 'yellow', 'red', 'green'], ['green', 'blue', 'yellow', 'red'], ['', '', '', ''], ['', '', '', '']],
+      [['yellow', 'blue', 'red', 'green'], ['green', 'red', 'yellow', 'blue'], ['blue', 'green', 'red', 'yellow'], ['', '', '', ''], ['', '', '', '']],
+      [['blue', 'red', 'green', 'yellow'], ['yellow', 'blue', 'red', 'green'], ['red', 'yellow', 'blue', 'green'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'yellow', 'blue', 'green'], ['green', 'blue', 'red', 'yellow'], ['yellow', 'green', 'blue', 'red'], ['', '', '', ''], ['', '', '', '']],
+      [['blue', 'green', 'red', 'yellow'], ['yellow', 'red', 'blue', 'green'], ['green', 'yellow', 'red', 'blue'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'blue', 'yellow', 'green'], ['green', 'yellow', 'blue', 'red'], ['blue', 'red', 'green', 'yellow'], ['', '', '', ''], ['', '', '', '']],
+      [['yellow', 'red', 'green', 'blue'], ['blue', 'green', 'yellow', 'red'], ['red', 'blue', 'yellow', 'green'], ['', '', '', ''], ['', '', '', '']],
+      [['green', 'blue', 'red', 'yellow'], ['yellow', 'red', 'green', 'blue'], ['blue', 'yellow', 'red', 'green'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'yellow', 'blue', 'green'], ['blue', 'green', 'red', 'yellow'], ['yellow', 'blue', 'green', 'red'], ['', '', '', ''], ['', '', '', '']],
+      [['blue', 'red', 'yellow', 'green'], ['green', 'blue', 'yellow', 'red'], ['red', 'green', 'blue', 'yellow'], ['', '', '', ''], ['', '', '', '']],
+      [['yellow', 'blue', 'green', 'red'], ['red', 'yellow', 'blue', 'green'], ['green', 'red', 'yellow', 'blue'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'blue', 'yellow', 'purple'], ['purple', 'green', 'red', 'blue'], ['yellow', 'red', 'green', 'purple'], ['blue', 'yellow', 'purple', 'green'], ['', '', '', ''], ['', '', '', '']],
+      [['purple', 'blue', 'green', 'red'], ['yellow', 'purple', 'blue', 'green'], ['red', 'yellow', 'red', 'purple'], ['green', 'red', 'yellow', 'blue'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'yellow', 'blue', 'purple'], ['green', 'red', 'yellow', 'blue'], ['purple', 'green', 'red', 'yellow'], ['blue', 'purple', 'green', 'red'], ['', '', '', ''], ['', '', '', '']],
+      [['blue', 'green', 'red', 'yellow'], ['purple', 'blue', 'green', 'red'], ['yellow', 'purple', 'blue', 'green'], ['red', 'yellow', 'purple', 'blue'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'purple', 'yellow', 'blue'], ['green', 'red', 'purple', 'yellow'], ['blue', 'green', 'red', 'purple'], ['yellow', 'blue', 'green', 'red'], ['', '', '', ''], ['', '', '', '']],
+      [['yellow', 'blue', 'green', 'purple'], ['red', 'yellow', 'blue', 'green'], ['purple', 'red', 'yellow', 'blue'], ['green', 'purple', 'red', 'yellow'], ['', '', '', ''], ['', '', '', '']],
+      [['blue', 'red', 'yellow', 'green'], ['purple', 'blue', 'red', 'yellow'], ['green', 'purple', 'blue', 'red'], ['yellow', 'green', 'purple', 'blue'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'yellow', 'purple', 'blue'], ['green', 'red', 'yellow', 'purple'], ['blue', 'green', 'red', 'yellow'], ['purple', 'blue', 'green', 'red'], ['', '', '', ''], ['', '', '', '']],
+      [['purple', 'blue', 'red', 'yellow'], ['yellow', 'purple', 'blue', 'green'], ['green', 'red', 'yellow', 'purple'], ['blue', 'green', 'red', 'yellow'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'green', 'blue', 'purple'], ['yellow', 'red', 'green', 'blue'], ['purple', 'yellow', 'red', 'green'], ['blue', 'purple', 'yellow', 'red'], ['', '', '', ''], ['', '', '', '']],
+      [['blue', 'yellow', 'purple', 'red'], ['green', 'blue', 'yellow', 'purple'], ['red', 'green', 'blue', 'yellow'], ['purple', 'red', 'green', 'blue'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'purple', 'blue', 'yellow'], ['green', 'red', 'purple', 'blue'], ['yellow', 'green', 'red', 'purple'], ['blue', 'yellow', 'green', 'red'], ['', '', '', ''], ['', '', '', '']],
+      [['yellow', 'blue', 'green', 'purple'], ['purple', 'yellow', 'blue', 'red'], ['red', 'purple', 'yellow', 'blue'], ['green', 'red', 'purple', 'yellow'], ['', '', '', ''], ['', '', '', '']],
+      [['blue', 'red', 'yellow', 'green'], ['purple', 'blue', 'red', 'yellow'], ['green', 'purple', 'blue', 'red'], ['yellow', 'green', 'purple', 'blue'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'yellow', 'purple', 'blue'], ['green', 'red', 'yellow', 'purple'], ['blue', 'green', 'red', 'yellow'], ['purple', 'blue', 'green', 'red'], ['', '', '', ''], ['', '', '', '']],
+      [['purple', 'blue', 'red', 'yellow'], ['yellow', 'purple', 'blue', 'green'], ['green', 'red', 'yellow', 'purple'], ['blue', 'green', 'red', 'yellow'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'green', 'blue', 'purple'], ['yellow', 'red', 'green', 'blue'], ['purple', 'yellow', 'red', 'green'], ['blue', 'purple', 'yellow', 'red'], ['', '', '', ''], ['', '', '', '']],
+      [['blue', 'yellow', 'purple', 'red'], ['green', 'blue', 'yellow', 'purple'], ['red', 'green', 'blue', 'yellow'], ['purple', 'red', 'green', 'blue'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'purple', 'blue', 'yellow'], ['green', 'red', 'purple', 'blue'], ['yellow', 'green', 'red', 'purple'], ['blue', 'yellow', 'green', 'red'], ['', '', '', ''], ['', '', '', '']],
+      [['yellow', 'blue', 'green', 'purple'], ['purple', 'yellow', 'blue', 'red'], ['red', 'purple', 'yellow', 'blue'], ['green', 'red', 'purple', 'yellow'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'blue', 'yellow', 'purple'], ['purple', 'green', 'red', 'blue'], ['yellow', 'red', 'green', 'purple'], ['blue', 'yellow', 'purple', 'green'], ['green', 'blue', 'red', 'yellow'], ['', '', '', ''], ['', '', '', '']],
+      [['purple', 'blue', 'green', 'red'], ['yellow', 'purple', 'blue', 'green'], ['red', 'yellow', 'red', 'purple'], ['green', 'red', 'yellow', 'blue'], ['blue', 'green', 'purple', 'red'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'yellow', 'blue', 'purple'], ['green', 'red', 'yellow', 'blue'], ['purple', 'green', 'red', 'yellow'], ['blue', 'purple', 'green', 'red'], ['yellow', 'blue', 'purple', 'green'], ['', '', '', ''], ['', '', '', '']],
+      [['blue', 'green', 'red', 'yellow'], ['purple', 'blue', 'green', 'red'], ['yellow', 'purple', 'blue', 'green'], ['red', 'yellow', 'purple', 'blue'], ['green', 'red', 'yellow', 'blue'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'purple', 'yellow', 'blue'], ['green', 'red', 'purple', 'yellow'], ['blue', 'green', 'red', 'purple'], ['yellow', 'blue', 'green', 'red'], ['purple', 'yellow', 'blue', 'green'], ['', '', '', ''], ['', '', '', '']],
+      [['yellow', 'blue', 'green', 'purple'], ['red', 'yellow', 'blue', 'green'], ['purple', 'red', 'yellow', 'blue'], ['green', 'purple', 'red', 'yellow'], ['blue', 'green', 'purple', 'red'], ['', '', '', ''], ['', '', '', '']],
+      [['blue', 'red', 'yellow', 'green'], ['purple', 'blue', 'red', 'yellow'], ['green', 'purple', 'blue', 'red'], ['yellow', 'green', 'purple', 'blue'], ['red', 'yellow', 'green', 'purple'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'yellow', 'purple', 'blue'], ['green', 'red', 'yellow', 'purple'], ['blue', 'green', 'red', 'yellow'], ['purple', 'blue', 'green', 'red'], ['yellow', 'purple', 'blue', 'green'], ['', '', '', ''], ['', '', '', '']],
+      [['purple', 'blue', 'red', 'yellow'], ['yellow', 'purple', 'blue', 'green'], ['green', 'red', 'yellow', 'purple'], ['blue', 'green', 'red', 'yellow'], ['red', 'blue', 'purple', 'green'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'green', 'blue', 'purple'], ['yellow', 'red', 'green', 'blue'], ['purple', 'yellow', 'red', 'green'], ['blue', 'purple', 'yellow', 'red'], ['green', 'blue', 'red', 'yellow'], ['', '', '', ''], ['', '', '', '']],
+      [['blue', 'yellow', 'purple', 'red'], ['green', 'blue', 'yellow', 'purple'], ['red', 'green', 'blue', 'yellow'], ['purple', 'red', 'green', 'blue'], ['yellow', 'purple', 'red', 'green'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'purple', 'blue', 'yellow'], ['green', 'red', 'purple', 'blue'], ['yellow', 'green', 'red', 'purple'], ['blue', 'yellow', 'green', 'red'], ['purple', 'blue', 'yellow', 'green'], ['', '', '', ''], ['', '', '', '']],
+      [['yellow', 'blue', 'green', 'purple'], ['purple', 'yellow', 'blue', 'red'], ['red', 'purple', 'yellow', 'blue'], ['green', 'red', 'purple', 'yellow'], ['blue', 'green', 'red', 'purple'], ['', '', '', ''], ['', '', '', '']],
+      [['blue', 'red', 'yellow', 'green'], ['purple', 'blue', 'red', 'yellow'], ['green', 'purple', 'blue', 'red'], ['yellow', 'green', 'purple', 'blue'], ['red', 'yellow', 'green', 'purple'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'yellow', 'purple', 'blue'], ['green', 'red', 'yellow', 'purple'], ['blue', 'green', 'red', 'yellow'], ['purple', 'blue', 'green', 'red'], ['yellow', 'purple', 'blue', 'green'], ['', '', '', ''], ['', '', '', '']],
+      [['purple', 'blue', 'red', 'yellow'], ['yellow', 'purple', 'blue', 'green'], ['green', 'red', 'yellow', 'purple'], ['blue', 'green', 'red', 'yellow'], ['red', 'blue', 'purple', 'green'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'green', 'blue', 'purple'], ['yellow', 'red', 'green', 'blue'], ['purple', 'yellow', 'red', 'green'], ['blue', 'purple', 'yellow', 'red'], ['green', 'blue', 'red', 'yellow'], ['', '', '', ''], ['', '', '', '']],
+      [['blue', 'yellow', 'purple', 'red'], ['green', 'blue', 'yellow', 'purple'], ['red', 'green', 'blue', 'yellow'], ['purple', 'red', 'green', 'blue'], ['yellow', 'purple', 'red', 'green'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'purple', 'blue', 'yellow'], ['green', 'red', 'purple', 'blue'], ['yellow', 'green', 'red', 'purple'], ['blue', 'yellow', 'green', 'red'], ['purple', 'blue', 'yellow', 'green'], ['', '', '', ''], ['', '', '', '']],
+      [['yellow', 'blue', 'green', 'purple'], ['purple', 'yellow', 'blue', 'red'], ['red', 'purple', 'yellow', 'blue'], ['green', 'red', 'purple', 'yellow'], ['blue', 'green', 'red', 'purple'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'blue', 'yellow', 'purple'], ['purple', 'green', 'red', 'blue'], ['yellow', 'red', 'green', 'purple'], ['blue', 'yellow', 'purple', 'green'], ['green', 'blue', 'red', 'yellow'], ['cyan', 'purple', 'blue', 'red'], ['', '', '', ''], ['', '', '', '']],
+      [['purple', 'blue', 'green', 'red'], ['yellow', 'purple', 'blue', 'green'], ['red', 'yellow', 'red', 'purple'], ['green', 'red', 'yellow', 'blue'], ['blue', 'green', 'purple', 'red'], ['cyan', 'yellow', 'blue', 'green'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'yellow', 'blue', 'purple'], ['green', 'red', 'yellow', 'blue'], ['purple', 'green', 'red', 'yellow'], ['blue', 'purple', 'green', 'red'], ['yellow', 'blue', 'purple', 'green'], ['cyan', 'red', 'yellow', 'blue'], ['', '', '', ''], ['', '', '', '']],
+      [['blue', 'green', 'red', 'yellow'], ['purple', 'blue', 'green', 'red'], ['yellow', 'purple', 'blue', 'green'], ['red', 'yellow', 'purple', 'blue'], ['green', 'red', 'yellow', 'blue'], ['cyan', 'purple', 'green', 'red'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'purple', 'yellow', 'blue'], ['green', 'red', 'purple', 'yellow'], ['blue', 'green', 'red', 'purple'], ['yellow', 'blue', 'green', 'red'], ['purple', 'yellow', 'blue', 'green'], ['cyan', 'blue', 'red', 'yellow'], ['', '', '', ''], ['', '', '', '']],
+      [['yellow', 'blue', 'green', 'purple'], ['red', 'yellow', 'blue', 'green'], ['purple', 'red', 'yellow', 'blue'], ['green', 'purple', 'red', 'yellow'], ['blue', 'green', 'purple', 'red'], ['cyan', 'yellow', 'blue', 'green'], ['', '', '', ''], ['', '', '', '']],
+      [['blue', 'red', 'yellow', 'green'], ['purple', 'blue', 'red', 'yellow'], ['green', 'purple', 'blue', 'red'], ['yellow', 'green', 'purple', 'blue'], ['red', 'yellow', 'green', 'purple'], ['cyan', 'blue', 'red', 'yellow'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'yellow', 'purple', 'blue'], ['green', 'red', 'yellow', 'purple'], ['blue', 'green', 'red', 'yellow'], ['purple', 'blue', 'green', 'red'], ['yellow', 'purple', 'blue', 'green'], ['cyan', 'red', 'yellow', 'blue'], ['', '', '', ''], ['', '', '', '']],
+      [['purple', 'blue', 'red', 'yellow'], ['yellow', 'purple', 'blue', 'green'], ['green', 'red', 'yellow', 'purple'], ['blue', 'green', 'red', 'yellow'], ['red', 'blue', 'purple', 'green'], ['cyan', 'yellow', 'blue', 'red'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'green', 'blue', 'purple'], ['yellow', 'red', 'green', 'blue'], ['purple', 'yellow', 'red', 'green'], ['blue', 'purple', 'yellow', 'red'], ['green', 'blue', 'red', 'yellow'], ['cyan', 'purple', 'blue', 'green'], ['', '', '', ''], ['', '', '', '']],
+      [['blue', 'yellow', 'purple', 'red'], ['green', 'blue', 'yellow', 'purple'], ['red', 'green', 'blue', 'yellow'], ['purple', 'red', 'green', 'blue'], ['yellow', 'purple', 'red', 'green'], ['cyan', 'blue', 'yellow', 'red'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'purple', 'blue', 'yellow'], ['green', 'red', 'purple', 'blue'], ['yellow', 'green', 'red', 'purple'], ['blue', 'yellow', 'green', 'red'], ['purple', 'blue', 'yellow', 'green'], ['cyan', 'red', 'blue', 'yellow'], ['', '', '', ''], ['', '', '', '']],
+      [['yellow', 'blue', 'green', 'purple'], ['purple', 'yellow', 'blue', 'red'], ['red', 'purple', 'yellow', 'blue'], ['green', 'red', 'purple', 'yellow'], ['blue', 'green', 'red', 'purple'], ['cyan', 'yellow', 'blue', 'green'], ['', '', '', ''], ['', '', '', '']],
+      [['blue', 'red', 'yellow', 'green'], ['purple', 'blue', 'red', 'yellow'], ['green', 'purple', 'blue', 'red'], ['yellow', 'green', 'purple', 'blue'], ['red', 'yellow', 'green', 'purple'], ['cyan', 'blue', 'red', 'yellow'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'yellow', 'purple', 'blue'], ['green', 'red', 'yellow', 'purple'], ['blue', 'green', 'red', 'yellow'], ['purple', 'blue', 'green', 'red'], ['yellow', 'purple', 'blue', 'green'], ['cyan', 'red', 'yellow', 'blue'], ['', '', '', ''], ['', '', '', '']],
+      [['purple', 'blue', 'red', 'yellow'], ['yellow', 'purple', 'blue', 'green'], ['green', 'red', 'yellow', 'purple'], ['blue', 'green', 'red', 'yellow'], ['red', 'blue', 'purple', 'green'], ['cyan', 'yellow', 'blue', 'red'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'green', 'blue', 'purple'], ['yellow', 'red', 'green', 'blue'], ['purple', 'yellow', 'red', 'green'], ['blue', 'purple', 'yellow', 'red'], ['green', 'blue', 'red', 'yellow'], ['cyan', 'purple', 'blue', 'green'], ['', '', '', ''], ['', '', '', '']],
+      [['blue', 'yellow', 'purple', 'red'], ['green', 'blue', 'yellow', 'purple'], ['red', 'green', 'blue', 'yellow'], ['purple', 'red', 'green', 'blue'], ['yellow', 'purple', 'red', 'green'], ['cyan', 'blue', 'yellow', 'red'], ['', '', '', ''], ['', '', '', '']],
+      [['red', 'purple', 'blue', 'yellow'], ['green', 'red', 'purple', 'blue'], ['yellow', 'green', 'red', 'purple'], ['blue', 'yellow', 'green', 'red'], ['purple', 'blue', 'yellow', 'green'], ['cyan', 'red', 'blue', 'yellow'], ['', '', '', ''], ['', '', '', '']],
+      [['yellow', 'blue', 'green', 'purple'], ['purple', 'yellow', 'blue', 'red'], ['red', 'purple', 'yellow', 'blue'], ['green', 'red', 'purple', 'yellow'], ['blue', 'green', 'red', 'purple'], ['cyan', 'yellow', 'blue', 'green'], ['', '', '', ''], ['', '', '', '']]
+    ];
+
+    function setup() {
+      try {
+        createCanvas(800, 600);
+        console.log('Canvas created: 800x600');
+      } catch (e) {
+        console.error('Failed to create canvas:', e);
+      }
+      initUI();
+      loadStage(currentStage);
+      console.log('Game setup complete');
+    }
+
+    function initUI() {
+      let restartButton = document.getElementById('restart');
+      let nextButton = document.getElementById('next');
+      let undoButton = document.getElementById('undo');
+      if (!restartButton || !nextButton || !undoButton) {
+        console.error('UI buttons not found!');
+        return;
+      }
+      console.log('UI buttons found, attaching listeners');
+      restartButton.addEventListener('click', () => {
+        loadStage(currentStage);
+        gameWon = false;
+        selectedBottle = null;
+        moveHistory = [];
+        document.getElementById('undo').disabled = true;
+        console.log(`Stage ${currentStage + 1} restarted`);
+      });
+      nextButton.addEventListener('click', () => {
+        if (currentStage < stages.length - 1) {
+          currentStage++;
+          loadStage(currentStage);
+          gameWon = false;
+          selectedBottle = null;
+          moveHistory = [];
+          document.getElementById('undo').disabled = true;
+          document.getElementById('next').disabled = true;
+          console.log(`Advanced to stage ${currentStage + 1}`);
+        }
+      });
+      undoButton.addEventListener('click', () => {
+        undoMove();
+        console.log('Undo clicked');
+      });
+    }
+
+    function loadStage(stageIndex) {
+      if (stageIndex < 0 || stageIndex >= stages.length) {
+        console.error(`Invalid stage index: ${stageIndex}`);
+        return;
+      }
+      bottles = [];
+      let stage = stages[stageIndex];
+      let bottleWidth = 50;
+      let spacing = 20;
+      let totalWidth = stage.length * (bottleWidth + spacing) - spacing;
+      let startX = (width - totalWidth) / 2;
+      for (let i = 0; i < stage.length; i++) {
+        bottles.push(new Bottle(startX + i * (bottleWidth + spacing), 500, stage[i]));
+      }
+      console.log(`Loaded stage ${stageIndex + 1} with ${stage.length} bottles:`, JSON.stringify(stage));
+    }
+
+    function getDifficulty(stageIndex) {
+      if (stageIndex < 20) return 'Easy';
+      if (stageIndex < 40) return 'Medium';
+      if (stageIndex < 60) return 'Hard';
+      if (stageIndex < 80) return 'Very Hard';
+      return 'Expert';
+    }
+
+    function draw() {
+      background(220);
+      let messageDiv = document.getElementById('message');
+      let stageDiv = document.getElementById('stage-info');
+      if (!messageDiv || !stageDiv) {
+        console.error('UI elements missing in draw!');
+        return;
+      }
+      stageDiv.innerText = `Stage ${currentStage + 1}/100 (${getDifficulty(currentStage)})`;
+      if (gameWon) {
+        messageDiv.innerText = 'Stage Complete! Click Next';
+        messageDiv.classList.remove('error');
+        document.getElementById('next').disabled = currentStage >= stages.length - 1;
+      } else if (selectedBottle) {
+        messageDiv.innerText = 'Choose a bottle to pour into';
+        messageDiv.classList.remove('error');
+        document.getElementById('next').disabled = true;
+      } else {
+        messageDiv.innerText = 'Select a bottle';
+        messageDiv.classList.remove('error');
+        document.getElementById('next').disabled = true;
+      }
+
+      if (bottles.length === 0) {
+        console.warn('No bottles to draw!');
+      } else {
+        console.log(`Drawing ${bottles.length} bottles`);
+        for (let bottle of bottles) {
+          bottle.show();
+        }
+      }
+    }
+
+    function mousePressed() {
+      if (gameWon) {
+        console.log('Game won, pouring disabled');
+        return;
+      }
+
+      let clickedBottle = null;
+      for (let bottle of bottles) {
+        if (bottle.isClicked(mouseX, mouseY)) {
+          clickedBottle = bottle;
+          console.log(`Clicked bottle at x:${bottle.x}, colors: ${bottle.colors}, top color: ${bottle.getTopColor()}`);
+          break;
+        }
+      }
+
+      let messageDiv = document.getElementById('message');
+      if (!clickedBottle) {
+        console.log(`No bottle clicked at mouseX:${mouseX}, mouseY:${mouseY}`);
+        if (selectedBottle) {
+          selectedBottle.selected = false;
+          selectedBottle = null;
+          console.log('Deselected bottle due to click outside');
+        }
+        return;
+      }
+
+      if (!selectedBottle) {
+        if (clickedBottle.canPour()) {
+          selectedBottle = clickedBottle;
+          selectedBottle.selected = true;
+          console.log(`Selected bottle with top color: ${clickedBottle.getTopColor()}`);
+        } else {
+          console.log('Cannot select: Bottle is empty or no valid top color');
+          messageDiv.innerText = 'Can’t select empty bottle';
+          messageDiv.classList.add('error');
+          clearTimeout(errorTimeout);
+          errorTimeout = setTimeout(() => {
+            messageDiv.classList.remove('error');
+            messageDiv.innerText = 'Select a bottle';
+          }, 2000);
+        }
+      } else {
+        if (clickedBottle === selectedBottle) {
+          selectedBottle.selected = false;
+          selectedBottle = null;
+          console.log('Deselected same bottle');
+        } else {
+          let canPour = clickedBottle.canReceive(selectedBottle.getTopColor());
+          console.log(`Pour attempt: Source top color: ${selectedBottle.getTopColor()}, Target top color: ${clickedBottle.getTopColor()}, Target empty slots: ${clickedBottle.colors.filter(c => c === '').length}, canReceive: ${canPour}`);
+          if (canPour) {
+            let sourceColors = [...selectedBottle.colors];
+            let targetColors = [...clickedBottle.colors];
+            selectedBottle.pourTo(clickedBottle);
+            moveHistory.push({ source: sourceColors, target: targetColors, sourceIndex: bottles.indexOf(selectedBottle), targetIndex: bottles.indexOf(clickedBottle) });
+            document.getElementById('undo').disabled = false;
+            console.log(`Poured. Source colors: ${selectedBottle.colors}, Target colors: ${clickedBottle.colors}, Move saved`);
+            selectedBottle.selected = false;
+            selectedBottle = null;
+            checkWin();
+          } else {
+            console.log('Pour failed: Invalid target (color mismatch or no space)');
+            clickedBottle.flash = 0.5;
+            messageDiv.innerText = 'Can’t pour there!';
+            messageDiv.classList.add('error');
+            clearTimeout(errorTimeout);
+            errorTimeout = setTimeout(() => {
+              messageDiv.classList.remove('error');
+              messageDiv.innerText = 'Select a bottle';
+            }, 2000);
+            selectedBottle.selected = false;
+            selectedBottle = null;
+          }
+        }
+      }
+    }
+
+    function undoMove() {
+      if (moveHistory.length === 0) return;
+      let lastMove = moveHistory.pop();
+      bottles[lastMove.sourceIndex].colors = lastMove.source;
+      bottles[lastMove.targetIndex].colors = lastMove.target;
+      gameWon = false;
+      document.getElementById('undo').disabled = moveHistory.length === 0;
+      console.log(`Undid move. Source colors: ${lastMove.source}, Target colors: ${lastMove.target}`);
+      checkWin();
+    }
+
+    function checkWin() {
+      for (let bottle of bottles) {
+        if (!bottle.isSorted() && !bottle.isEmpty()) {
+          return;
+        }
+      }
+      gameWon = true;
+      bottles.forEach(b => b.glow = 1);
+      console.log(`Win condition met for stage ${currentStage + 1}!`);
+    }
+
+    class Bottle {
+      constructor(x, y, colors) {
+        this.x = x;
+        this.y = y;
+        this.colors = [...colors];
+        this.width = 50;
+        this.height = 200;
+        this.layerHeight = this.height / 4;
+        this.selected = false;
+        this.flash = 0;
+        this.glow = 0;
+      }
+
+      show() {
+        let glowAlpha = this.glow > 0 ? this.glow * 50 : 50;
+        this.glow -= 0.016;
+        if (this.glow < 0) this.glow = 0;
+
+        stroke(this.selected ? [0, 0, 255] : 0);
+        strokeWeight(this.selected ? 4 : 2);
+        if (this.flash > 0) {
+          stroke(255, 0, 0);
+          strokeWeight(4);
+          this.flash -= 0.016;
+          if (this.flash < 0) this.flash = 0;
+        }
+        fill(255, 255, 255, glowAlpha);
+        rect(this.x, this.y - this.height, this.width, this.height, 10);
+
+        for (let i = 0; i < 4; i++) {
+          if (this.colors[i] !== '') {
+            fill(this.getColorValue(this.colors[i]));
+            noStroke();
+            rect(this.x, this.y - (i + 1) * this.layerHeight, this.width, this.layerHeight);
+          }
+        }
+      }
+
+      getColorValue(color) {
+        switch (color) {
+          case 'red': return [255, 0, 0];
+          case 'blue': return [0, 0, 255];
+          case 'green': return [0, 255, 0];
+          case 'yellow': return [255, 255, 0];
+          case 'purple': return [160, 0, 160];
+          case 'cyan': return [0, 255, 255];
+          default: return [255, 255, 255];
+        }
+      }
+
+      isClicked(mx, my) {
+        return mx >= this.x - 30 && mx <= this.x + this.width + 30 &&
+               my >= this.y - this.height - 30 && my <= this.y + 30;
+      }
+
+      canPour() {
+        return this.getTopColor() !== '';
+      }
+
+      getTopColor() {
+        for (let i = 3; i >= 0; i--) {
+          if (this.colors[i] !== '') return this.colors[i];
+        }
+        return '';
+      }
+
+      canReceive(color) {
+        if (color === '') return false;
+        let topColor = this.getTopColor();
+        let emptySlots = this.colors.filter(c => c === '').length;
+        if (emptySlots === 0) return false;
+        return topColor === '' || topColor === color;
+      }
+
+      pourTo(other) {
+        let topColor = this.getTopColor();
+        let sourceIndex = 3;
+        while (sourceIndex >= 0 && this.colors[sourceIndex] === '') sourceIndex--;
+        if (sourceIndex < 0) return;
+        this.colors[sourceIndex] = '';
+
+        let targetIndex = 0;
+        while (targetIndex < 4 && other.colors[targetIndex] !== '') targetIndex++;
+        if (targetIndex >= 4) return;
+        other.colors[targetIndex] = topColor;
+      }
+
+      isSorted() {
+        let color = this.colors[0];
+        if (color === '') return false;
+        for (let i = 1; i < 4; i++) {
+          if (this.colors[i] !== color && this.colors[i] !== '') return false;
+        }
+        return true;
+      }
+
+      isEmpty() {
+        return this.colors.every(c => c === '');
+      }
+    }
+  </script>
+</body>
+</html>
